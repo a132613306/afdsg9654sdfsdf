@@ -1,0 +1,32 @@
+name: Cloudflare Real-time Scanner
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 0 * * *'
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: SpeedTest
+        run: |
+          wget https://github.com/XIU2/CloudflareSpeedTest/releases/download/v2.2.5/CloudflareST_linux_amd64.tar.gz
+          tar -zxf CloudflareST_linux_amd64.tar.gz
+          chmod +x CloudflareST
+          
+          ./CloudflareST -n 1000 -dn 80 -tl 300 -sl 10 -o result.csv
+          
+          # Extract IP and Location
+          awk -F, 'NR>1 {print $1"#" $5 "_" $6}' result.csv > ip.txt
+          
+          if [ ! -s ip.txt ]; then echo "104.16.160.1#Fixed_IP" > ip.txt; fi
+
+      - name: Push
+        run: |
+          git config --local user.email "actions@github.com"
+          git config --local user.name "github-actions[bot]"
+          git add ip.txt
+          git commit -m "Update: $(date)" || true
+          git push
