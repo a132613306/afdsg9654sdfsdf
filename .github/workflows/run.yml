@@ -1,37 +1,29 @@
-name: Cloudflare IP Auto Speedtest
-on:
-  schedule:
-    - cron: '0 20 * * *' # 每天北京时间凌晨4点自动运行
-  workflow_dispatch: # 允许手动点击运行
-
-jobs:
-  build:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v3
-
-      - name: Run Speedtest
+- name: Run Speedtest
         run: |
-          # 1. 下载测速工具
+          # 1. 下载测速工具和国家数据库
           wget https://github.com/XIU2/CloudflareSpeedTest/releases/download/v2.2.5/CloudflareST_linux_amd64.tar.gz
           tar -zxf CloudflareST_linux_amd64.tar.gz
           chmod +x CloudflareST
+          wget -O cfst_itinerary.txt https://raw.githubusercontent.com/XIU2/CloudflareSpeedTest/master/cfst_itinerary.txt
           
-          # 2. 执行测速
-          # -tl 200: 过滤延迟超过 200ms 的 IP
-          # -dn 40: 只取最快的 40 个 IP
-          # -sl 5: 只要下载速度大于 5MB/s 的
-          ./CloudflareST -tl 200 -dn 40 -sl 5
+          # 2. 【聚合阶段】创建临时文件来存放所有搜集到的 IP
+          touch temp_ips.txt
           
-          # 3. 格式化输出为标准格式：IP:443#数据中心代码
-          # $1 是 IP 地址, $6 是数据中心代码 (如 HKG, LAX)
+          # 抓取你提供的所有源 (使用 curl)
+          curl -s https://addressesapi.090227.xyz/CloudFlareYes >> temp_ips.txt
+          curl -s "https://ipdb.api.030101.xyz/?type=bestcf&country=true" >> temp_ips.txt
+          curl -s https://raw.githubusercontent.com/hubbylei/bestcf/main/bestproxy.txt >> temp_ips.txt
+          curl -s https://yipx.976432.xyz/ip.txt >> temp_ips.txt
+          
+          # 3. 【清洗阶段】只保留 IP 部分，去除端口和备注，去重
+          # 这一步确保输入给测速工具的是纯净的 IP 列表
+          grep -oE "\b([0-9]{1,3}\.){3}[0-9]{1,3}\b" temp_ips.txt | sort -u > my_targets.txt
+          
+          # 4. 【优选阶段】针对这些聚合来的 IP 进行二次测速
+          # -f my_targets.txt: 只测速我们搜集到的这些 IP
+          # -dn 40: 从中选出最快的 40 个
+          # -p 1: 显示国家/数据中心
+          ./CloudflareST -f my_targets.txt -tl 200 -dn 40 -sl 5 -p 1
+          
+          # 5. 【格式化】输出最终带国家的 ip.txt
           awk -F, 'NR>1 {print $1":443#"$6}' result.csv > ip.txt
-
-      - name: Commit and Push
-        run: |
-          git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          git config --global user.name "github-actions[bot]"
-          git add ip.txt
-          git commit -m "Update IP list: 40 IPs with standard format" || exit 0
-          git push
