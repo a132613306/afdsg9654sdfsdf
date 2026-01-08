@@ -1,32 +1,35 @@
-name: Cloudflare Real-time Scanner
+name: Cloudflare IP Auto Speedtest
 on:
-  workflow_dispatch:
   schedule:
-    - cron: '0 0 * * *'
+    - cron: '0 20 * * *' # 每天北京时间凌晨4点自动运行
+  workflow_dispatch: # 允许手动点击运行
 
 jobs:
-  scan:
+  build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v3
 
-      - name: SpeedTest
+      - name: Run Speedtest
         run: |
+          # 下载测速工具
           wget https://github.com/XIU2/CloudflareSpeedTest/releases/download/v2.2.5/CloudflareST_linux_amd64.tar.gz
           tar -zxf CloudflareST_linux_amd64.tar.gz
           chmod +x CloudflareST
           
-          ./CloudflareST -n 1000 -dn 80 -tl 300 -sl 10 -o result.csv
+          # 执行测速
+          # -dn 40 表示只取最快的 40 个 IP
+          ./CloudflareST -tl 200 -dn 40 -sl 5
           
-          # Extract IP and Location
-          awk -F, 'NR>1 {print $1"#" $5 "_" $6}' result.csv > ip.txt
-          
-          if [ ! -s ip.txt ]; then echo "104.16.160.1#Fixed_IP" > ip.txt; fi
+          # 【标准格式化】：IP:443#国家
+          # $1是IP, $6是数据中心名称(通常代表国家/地区代码)
+          awk -F, 'NR>1 {print $1":443#"$6}' result.csv > ip.txt
 
-      - name: Push
+      - name: Commit and Push
         run: |
-          git config --local user.email "actions@github.com"
-          git config --local user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git config --global user.name "github-actions[bot]"
           git add ip.txt
-          git commit -m "Update: $(date)" || true
+          git commit -m "Update IP list: 40 IPs with Country format" || exit 0
           git push
