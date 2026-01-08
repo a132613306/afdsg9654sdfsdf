@@ -13,28 +13,25 @@ jobs:
 
       - name: Run Speedtest
         run: |
-          # 1. 下载并解压测速工具
+          # 1. 下载工具
           wget https://github.com/XIU2/CloudflareSpeedTest/releases/download/v2.2.5/CloudflareST_linux_amd64.tar.gz
           tar -zxf CloudflareST_linux_amd64.tar.gz
           chmod +x CloudflareST
           
-          # 2. 执行测速 (取最快的40个，测速文件大小5MB)
-          ./CloudflareST -tl 200 -dn 40 -sl 5
+          # 2. 核心：强制下载数据中心数据库文件，没有它就认不出国家
+          wget -O cfst_itinerary.txt https://raw.githubusercontent.com/XIU2/CloudflareSpeedTest/master/cfst_itinerary.txt
           
-          # 3. 【神级修正】自动识别列并提取
-          # 这一段代码会自动寻找包含字母（国家代码）的那一列，不再死板地数第几列
-          cat result.csv | awk -F, 'NR==1 {for(i=1;i<=NF;i++) if($i=="数据中心") col=i} NR>1 {print $1":443#"$col}' > ip.txt
+          # 3. 测速：先测 5 个 (-dn 5)，-p 1 强制显示数据中心，-f 指定数据库
+          ./CloudflareST -tl 200 -dn 5 -sl 5 -p 1
           
-          # 如果上面那个找不到表头，就用这个万能备选方案（同时打印第6和第7列）
-          if [ ! -s ip.txt ]; then
-             awk -F, 'NR>1 {print $1":443#"$6$7}' result.csv > ip.txt
-          fi
+          # 4. 提取：这次我们用一个更聪明的写法，打印“IP:443#国家”
+          # $6 是 CloudflareST 的标准数据中心列
+          awk -F, 'NR>1 {print $1":443#"$6}' result.csv > ip.txt
 
       - name: Commit and Push
         run: |
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
           git config --global user.name "github-actions[bot]"
           git add ip.txt
-          # 即使内容没变也不报错
-          git commit -m "Auto update IP with country code" || exit 0
+          git commit -m "Test 5 IPs with country codes" || exit 0
           git push
