@@ -1,34 +1,24 @@
-name: Cloudflare IP Auto Speedtest
+name: Cloudflare-Test
 on:
-  workflow_dispatch: 
-
+  workflow_dispatch:
 jobs:
-  build:
+  test:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
-      - name: Run Speedtest
+      - name: Run
         run: |
-          # 1. 下载并解压
           wget https://github.com/XIU2/CloudflareSpeedTest/releases/download/v2.2.5/CloudflareST_linux_amd64.tar.gz
           tar -zxf CloudflareST_linux_amd64.tar.gz
           chmod +x CloudflareST
-          
-          # 2. 核心：下载国家代码数据库
           wget -O cfst_itinerary.txt https://raw.githubusercontent.com/XIU2/CloudflareSpeedTest/master/cfst_itinerary.txt
-          
-          # 3. 运行测速 (只取5个IP)
-          ./CloudflareST -dn 5 -sl 5 -p 1
-          
-          # 4. 提取 IP 和 国家代码 ($6)
+          ./CloudflareST -dn 5 -p 1
           awk -F, 'NR>1 {print $1":443#"$6}' result.csv > ip.txt
-
-      - name: Commit and Push
+      - name: Push
         run: |
           git config --global user.email "actions@github.com"
           git config --global user.name "GitHub Actions"
           git add ip.txt
-          git commit -m "update ip" || exit 0
+          git commit -m "update" || exit 0
           git push
