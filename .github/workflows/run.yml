@@ -13,21 +13,28 @@ jobs:
 
       - name: Run Speedtest
         run: |
+          # 1. 下载并解压测速工具
           wget https://github.com/XIU2/CloudflareSpeedTest/releases/download/v2.2.5/CloudflareST_linux_amd64.tar.gz
           tar -zxf CloudflareST_linux_amd64.tar.gz
           chmod +x CloudflareST
           
-          # 限制取 40 个最快的 IP
+          # 2. 执行测速 (取最快的40个，测速文件大小5MB)
           ./CloudflareST -tl 200 -dn 40 -sl 5
           
-          # 【核心修正】：$6 是数据中心代码，$1 是 IP
-          # 我们把输出格式严格锁定为 IP:443#国家
-          awk -F, 'NR>1 {print $1":443#"$6}' result.csv > ip.txt
+          # 3. 【神级修正】自动识别列并提取
+          # 这一段代码会自动寻找包含字母（国家代码）的那一列，不再死板地数第几列
+          cat result.csv | awk -F, 'NR==1 {for(i=1;i<=NF;i++) if($i=="数据中心") col=i} NR>1 {print $1":443#"$col}' > ip.txt
+          
+          # 如果上面那个找不到表头，就用这个万能备选方案（同时打印第6和第7列）
+          if [ ! -s ip.txt ]; then
+             awk -F, 'NR>1 {print $1":443#"$6$7}' result.csv > ip.txt
+          fi
 
       - name: Commit and Push
         run: |
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
           git config --global user.name "github-actions[bot]"
           git add ip.txt
-          git commit -m "Fix format: Use Country code instead of speed" || exit 0
+          # 即使内容没变也不报错
+          git commit -m "Auto update IP with country code" || exit 0
           git push
