@@ -13,17 +13,19 @@ jobs:
 
       - name: Run Speedtest
         run: |
-          # 下载测速工具
+          # 1. 下载测速工具
           wget https://github.com/XIU2/CloudflareSpeedTest/releases/download/v2.2.5/CloudflareST_linux_amd64.tar.gz
           tar -zxf CloudflareST_linux_amd64.tar.gz
           chmod +x CloudflareST
           
-          # 执行测速
-          # -dn 40 表示只取最快的 40 个 IP
+          # 2. 执行测速
+          # -tl 200: 过滤延迟超过 200ms 的 IP
+          # -dn 40: 只取最快的 40 个 IP
+          # -sl 5: 只要下载速度大于 5MB/s 的
           ./CloudflareST -tl 200 -dn 40 -sl 5
           
-          # 【标准格式化】：IP:443#国家
-          # $1是IP, $6是数据中心名称(通常代表国家/地区代码)
+          # 3. 格式化输出为标准格式：IP:443#数据中心代码
+          # $1 是 IP 地址, $6 是数据中心代码 (如 HKG, LAX)
           awk -F, 'NR>1 {print $1":443#"$6}' result.csv > ip.txt
 
       - name: Commit and Push
@@ -31,5 +33,5 @@ jobs:
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
           git config --global user.name "github-actions[bot]"
           git add ip.txt
-          git commit -m "Update IP list: 40 IPs with Country format" || exit 0
+          git commit -m "Update IP list: 40 IPs with standard format" || exit 0
           git push
