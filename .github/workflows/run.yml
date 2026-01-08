@@ -1,24 +1,37 @@
-name: Cloudflare-Test
+name: Cloudflare IP Auto Speedtest
 on:
-  workflow_dispatch:
+  schedule:
+    - cron: '0 20 * * *' # 每天北京时间凌晨4点自动运行
+  workflow_dispatch: # 允许手动点击运行
+
 jobs:
-  test:
+  build:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
-      - name: Run
+        uses: actions/checkout@v3
+
+      - name: Run Speedtest
         run: |
+          # 1. 下载测速工具
           wget https://github.com/XIU2/CloudflareSpeedTest/releases/download/v2.2.5/CloudflareST_linux_amd64.tar.gz
           tar -zxf CloudflareST_linux_amd64.tar.gz
           chmod +x CloudflareST
-          wget -O cfst_itinerary.txt https://raw.githubusercontent.com/XIU2/CloudflareSpeedTest/master/cfst_itinerary.txt
-          ./CloudflareST -dn 5 -p 1
+          
+          # 2. 执行测速
+          # -tl 200: 过滤延迟超过 200ms 的 IP
+          # -dn 40: 只取最快的 40 个 IP
+          # -sl 5: 只要下载速度大于 5MB/s 的
+          ./CloudflareST -tl 200 -dn 40 -sl 5
+          
+          # 3. 格式化输出为标准格式：IP:443#数据中心代码
+          # $1 是 IP 地址, $6 是数据中心代码 (如 HKG, LAX)
           awk -F, 'NR>1 {print $1":443#"$6}' result.csv > ip.txt
-      - name: Push
+
+      - name: Commit and Push
         run: |
-          git config --global user.email "actions@github.com"
-          git config --global user.name "GitHub Actions"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git config --global user.name "github-actions[bot]"
           git add ip.txt
-          git commit -m "update" || exit 0
+          git commit -m "Update IP list: 40 IPs with standard format" || exit 0
           git push
